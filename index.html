@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vocabulary Practice Master</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#090d16">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+</head>
+
+<body>
+  <div class="container">
+    <!-- Start Screen -->
+    <div id="startScreen" class="card">
+      <div class="badge">Lexicon Mastery</div>
+      <h1>Vocabulary</h1>
+      <div class="subtitle">10 Parts Challenge</div>
+      <p class="description">Master your new vocabulary set! Complete 10 parts with fixed lists. Type the correct term
+        for the definition shown.</p>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-value" id="totalWordsCount">85</div>
+          <div class="stat-label">Total Words</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">10</div>
+          <div class="stat-label">Parts</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">8-9</div>
+          <div class="stat-label">Per Part</div>
+        </div>
+      </div>
+      <button onclick="showPartSelector()">Start Learning</button>
+    </div>
+
+    <!-- Part Selector Screen -->
+    <div id="partSelectorScreen" class="card hidden">
+      <div class="badge">Modules</div>
+      <h1>Select Part</h1>
+      <div class="subtitle">Choose a section</div>
+      <p class="description">Select any module to start practicing. Words in each part remain fixed.</p>
+      <div class="part-selector" id="partSelector"></div>
+      <button class="secondary-btn" onclick="backToStart()">← Back to Main Menu</button>
+    </div>
+
+    <!-- Quiz Screen -->
+    <div id="quizScreen" class="card hidden">
+      <div class="header-row">
+        <div class="counter" id="counter">1 / 10</div>
+        <div class="score" id="score">Score: 0</div>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressBar"></div>
+      </div>
+      <div class="definition-card">
+        <div class="definition-label">Definition / Translation</div>
+        <div class="definition-text" id="definition"></div>
+      </div>
+      <input type="text" id="answerInput" placeholder="Type the matching word..." onkeypress="handleKeyPress(event)"
+        autocomplete="off">
+      <div id="feedback" class="hidden"></div>
+      <button id="submitBtn" onclick="checkAnswer()">Submit Answer</button>
+      <button class="secondary-btn" onclick="exitQuizToParts()" style="margin-top: 12px;">← Back to Parts</button>
+      <div class="hint">Press Enter to submit / continue</div>
+    </div>
+
+    <!-- Results Screen -->
+    <div id="resultsScreen" class="card hidden">
+      <div style="text-align:center;">
+        <div class="results-title" id="gradeLabel"></div>
+        <div class="results-score" id="percentScore"></div>
+        <div class="results-subtitle" id="resultsSummary"></div>
+      </div>
+      <div class="results-bar">
+        <div class="results-progress">
+          <div class="results-progress-fill" id="resultsBar"></div>
+        </div>
+      </div>
+      <div class="results-list">
+        <div class="results-header">Session Breakdown</div>
+        <div class="results-scroll" id="resultsList"></div>
+      </div>
+      <div class="button-group">
+        <button onclick="retryPart()">Retry Part</button>
+        <button class="secondary-btn" onclick="backToPartSelector()">Choose Another</button>
+      </div>
+    </div>
+  </div>
+  <script src="script.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js');
+    }
+  </script>
+</body>
+
+</html>
