@@ -11,44 +11,40 @@ let totalPartsCount = 0;
 
 let currentPart = null, questions = [], currentIndex = 0, score = 0;
 let answered = false, results = [];
+let isReviewMode = false; // Review rejimini kuzatish
 
-// --- LOCAL STORAGE BILAN ISHLASH (10 KUNLIK TAYMER) ---
-const EXPIRATION_TIME = 10 * 24 * 60 * 60 * 1000; // 10 kun millisekundlarda
+// --- LOCAL STORAGE (10 KUNLIK TAYMER) ---
+const EXPIRATION_TIME = 10 * 24 * 60 * 60 * 1000; // 10 kun
 
-function getLearnedWords() {
+function getWordStatus() {
   const saved = localStorage.getItem('learned_words_v2');
-  if (!saved) return [];
-  
+  if (!saved) return { valid: [], expired: [] };
+
   const learnedMap = JSON.parse(saved);
   const now = Date.now();
-  const validWords = [];
-  let isUpdated = false;
+  const valid = [];
+  const expired = [];
 
   for (const [word, timestamp] of Object.entries(learnedMap)) {
     if (now - timestamp < EXPIRATION_TIME) {
-      validWords.push(word);
+      valid.push(word);
     } else {
-      delete learnedMap[word]; // 10 kundan oshgan so'zlarni o'chirish
-      isUpdated = true;
+      expired.push(word); // 10 kundan oshgan so'zlar
     }
   }
 
-  if (isUpdated) {
-    localStorage.setItem('learned_words_v2', JSON.stringify(learnedMap));
-  }
-
-  return validWords;
+  return { valid, expired };
 }
 
 function saveLearnedWord(word) {
   const saved = localStorage.getItem('learned_words_v2');
   const learnedMap = saved ? JSON.parse(saved) : {};
   
-  learnedMap[normalize(word)] = Date.now(); // Hozirgi vaqtni saqlash
+  learnedMap[normalize(word)] = Date.now(); // Yodlanganda vaqt to'liq 10 kunga yangilanadi
   localStorage.setItem('learned_words_v2', JSON.stringify(learnedMap));
 }
 
-// 2. Ma'lumotlarni Supabase'dan olish
+// 2. Supabase ma'lumotlarini olish
 async function fetchVocabulary() {
   if (!supabaseClient) return;
   
@@ -79,7 +75,7 @@ function createParts() {
   }
 }
 
-// Global Enter tugmasi
+// Global Enter
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Enter') {
     const quizScreen = document.getElementById('quizScreen');
@@ -101,7 +97,19 @@ function showPartSelector() {
   const sel = document.getElementById('partSelector');
   sel.innerHTML = '';
   
-  const learnedWords = getLearnedWords();
+  const status = getWordStatus();
+  const learnedWords = status.valid;
+  const expiredWords = status.expired;
+
+  // Muddat o'tgan so'zlar bo'lsa red tugma va soni chiqadi
+  const reviewBtn = document.getElementById('reviewQuizBtn');
+  const reviewCount = document.getElementById('reviewCount');
+  if (reviewBtn && expiredWords.length > 0) {
+    reviewBtn.style.display = 'block';
+    reviewCount.textContent = expiredWords.length;
+  } else if (reviewBtn) {
+    reviewBtn.style.display = 'none';
+  }
 
   for (let i = 1; i <= totalPartsCount; i++) {
     const btn = document.createElement('button');
@@ -116,6 +124,25 @@ function showPartSelector() {
   }
 }
 
+// MUDDATI O'TGAN SO'ZLARDAN TEST BOSHLASH
+function startReviewQuiz() {
+  const status = getWordStatus();
+  const expiredWords = status.expired;
+
+  // Faqat taymer tugagan so'zlarni Supabase ma'lumotlaridan ajratib olish
+  questions = vocabularyList.filter(item => expiredWords.includes(normalize(item.word)));
+  
+  if (questions.length === 0) return;
+
+  isReviewMode = true;
+  currentIndex = 0; score = 0; results = []; answered = false;
+  
+  document.getElementById('partSelectorScreen').classList.add('hidden');
+  document.getElementById('quizScreen').classList.remove('hidden');
+  document.getElementById('resultsScreen').classList.add('hidden');
+  showQuestion();
+}
+
 function backToStart() {
   document.getElementById('partSelectorScreen').classList.add('hidden');
   document.getElementById('startScreen').classList.remove('hidden');
@@ -127,6 +154,7 @@ function exitQuizToParts() {
 }
 
 function startPart(n) {
+  isReviewMode = false;
   currentPart = n;
   questions = [...allVocab[`part${n}`]];
   currentIndex = 0; score = 0; results = []; answered = false;
@@ -138,10 +166,15 @@ function startPart(n) {
 
 function showQuestion() {
   const q = questions[currentIndex];
-  const learnedWords = getLearnedWords();
-  const isAlreadyLearned = learnedWords.includes(normalize(q.word));
+  const status = getWordStatus();
+  const isAlreadyLearned = status.valid.includes(normalize(q.word));
 
-  const statusBadge = isAlreadyLearned ? `<span style="color:#10b981; font-size:12px; display:block; margin-bottom:5px;">✓ Mastered (Active)</span>` : '';
+  let statusBadge = '';
+  if (isReviewMode) {
+    statusBadge = `<span style="color:#ef4444; font-size:12px; display:block; margin-bottom:5px;">⚠️ Needs Review (10+ days)</span>`;
+  } else if (isAlreadyLearned) {
+    statusBadge = `<span style="color:#10b981; font-size:12px; display:block; margin-bottom:5px;">✓ Mastered (Active)</span>`;
+  }
   
   document.getElementById('definition').innerHTML = statusBadge + q.definition;
   document.getElementById('counter').textContent = `${currentIndex + 1} / ${questions.length}`;
@@ -173,7 +206,7 @@ function checkAnswer() {
   
   if (isCorrect) {
     score++;
-    saveLearnedWord(questions[currentIndex].word); // <--- Saqlash va 10 kunlik taymerni yangilash
+    saveLearnedWord(questions[currentIndex].word); // To'g'ri topsa, taymer qayta 10 kunga tiklanadi
   }
   
   results.push({ 
@@ -236,7 +269,8 @@ function showResults() {
 }
 
 function retryPart() {
-  startPart(currentPart);
+  if (isReviewMode) startReviewQuiz();
+  else startPart(currentPart);
 }
 
 function backToPartSelector() {

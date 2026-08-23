@@ -40,13 +40,18 @@
     </div>
 
     <!-- Part Selector Screen -->
-    <div id="partSelectorScreen" class="card hidden">
-      <div class="badge">Modules</div>
-      <h1>Select Part</h1>
-      <div class="subtitle">Choose a section</div>
-      <p class="description">Select any module to start practicing. Words in each part remain fixed.</p>
-      <div class="part-selector" id="partSelector"></div>
-      <button class="secondary-btn" onclick="backToStart()">← Back to Main Menu</button>
+    <!-- Part Selector Ekrani ichida Select Part sarlavhasidan pastga qo'shasiz -->
+    <div id="partSelectorScreen" class="hidden">
+      <h2>Select Part</h2>
+
+      <!-- MUDDATI O'TGAN SO'ZLAR UCHUN TEST TUGMASI -->
+      <button id="reviewQuizBtn" onclick="startReviewQuiz()" class="part-btn"
+        style="background: #ef4444; color: white; margin-bottom: 15px; display: none; font-weight: bold;">
+        ⚠️ Review Due Words (<span id="reviewCount">0</span>)
+      </button>
+
+      <div id="partSelector"></div>
+      <button onclick="backToStart()">Back</button>
     </div>
 
     <!-- Quiz Screen -->
