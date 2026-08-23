@@ -4,13 +4,28 @@ const SUPABASE_KEY = "sb_publishable__p90Eg45QchPn2Y8uGfWHg_NpevmB3p";
 
 const supabaseClient = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 
-const WORDS_PER_PART = 10; // Har bir partda aniq 10 tadan so'z bo'ladi
+const WORDS_PER_PART = 10;
 const allVocab = {};
 let vocabularyList = [];
 let totalPartsCount = 0;
 
 let currentPart = null, questions = [], currentIndex = 0, score = 0;
 let answered = false, results = [];
+
+// --- LOCAL STORAGE BILAN ISHLASH ---
+function getLearnedWords() {
+  const saved = localStorage.getItem('learned_words');
+  return saved ? JSON.parse(saved) : [];
+}
+
+function saveLearnedWord(word) {
+  let learned = getLearnedWords();
+  const normalizedWord = normalize(word);
+  if (!learned.includes(normalizedWord)) {
+    learned.push(normalizedWord);
+    localStorage.setItem('learned_words', JSON.stringify(learned));
+  }
+}
 
 // 2. Ma'lumotlarni Supabase'dan olish
 async function fetchVocabulary() {
@@ -32,11 +47,8 @@ async function fetchVocabulary() {
   createParts();
 }
 
-// 3. So'zlarni har 10 tadan qilib dinamik Part'larga bo'lish
 function createParts() {
   totalPartsCount = Math.ceil(vocabularyList.length / WORDS_PER_PART);
-  
-  // Eski ma'lumotlarni tozalash
   for (let key in allVocab) delete allVocab[key];
 
   for (let i = 0; i < totalPartsCount; i++) {
@@ -68,12 +80,17 @@ function showPartSelector() {
   const sel = document.getElementById('partSelector');
   sel.innerHTML = '';
   
-  // Dinamik partlar soni bo'yicha tugmalarni chiqarish
+  const learnedWords = getLearnedWords();
+
   for (let i = 1; i <= totalPartsCount; i++) {
     const btn = document.createElement('button');
     btn.className = 'part-btn';
-    const wordsInPart = allVocab['part' + i] ? allVocab['part' + i].length : 0;
-    btn.innerHTML = `Part ${i} <span style="float:right; opacity:0.6; font-size:12px;">${wordsInPart} words</span>`;
+    const partWords = allVocab['part' + i] || [];
+    
+    // Part ichida nechta so'z yodlanganini hisoblash
+    const learnedInPart = partWords.filter(q => learnedWords.includes(normalize(q.word))).length;
+
+    btn.innerHTML = `Part ${i} <span style="float:right; opacity:0.8; font-size:12px;">${learnedInPart}/${partWords.length} learned</span>`;
     btn.onclick = () => startPart(i);
     sel.appendChild(btn);
   }
@@ -101,7 +118,13 @@ function startPart(n) {
 
 function showQuestion() {
   const q = questions[currentIndex];
-  document.getElementById('definition').textContent = q.definition;
+  const learnedWords = getLearnedWords();
+  const isAlreadyLearned = learnedWords.includes(normalize(q.word));
+
+  // Agar so'z avval yodlangan bo'lsa, indicator ko'rsatish
+  const statusBadge = isAlreadyLearned ? `<span style="color:#10b981; font-size:12px; display:block; margin-bottom:5px;">✓ Mastered before</span>` : '';
+  
+  document.getElementById('definition').innerHTML = statusBadge + q.definition;
   document.getElementById('counter').textContent = `${currentIndex + 1} / ${questions.length}`;
   document.getElementById('score').textContent = `Score: ${score}`;
   document.getElementById('progressBar').style.width = `${(currentIndex / questions.length) * 100}%`;
@@ -128,7 +151,11 @@ function checkAnswer() {
   answered = true;
   inp.disabled = true;
   const isCorrect = userAns === correct;
-  if (isCorrect) score++;
+  
+  if (isCorrect) {
+    score++;
+    saveLearnedWord(questions[currentIndex].word); // <--- SO'Z LOCALSTORAGE'GA SAQLANADI
+  }
   
   results.push({ 
     definition: questions[currentIndex].definition, 
