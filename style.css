@@ -64,6 +64,59 @@ h1 {
     letter-spacing: -1px;
 }
 
+/* --- AUTHENTICATION STYLES --- */
+.auth-btn.google-btn {
+    background: #ffffff;
+    color: #1e293b;
+    border: none;
+    padding: 12px 24px;
+    font-size: 15px;
+    font-weight: 700;
+    border-radius: 12px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    margin-top: 0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.auth-btn.google-btn:hover {
+    background: #f1f5f9;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(255, 255, 255, 0.2);
+}
+
+.user-card {
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 16px 20px;
+    border-radius: 16px;
+    display: inline-block;
+}
+
+.logout-btn {
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid #ef4444;
+    color: #f87171;
+    padding: 6px 16px;
+    font-size: 13px;
+    font-weight: 700;
+    border-radius: 8px;
+    cursor: pointer;
+    width: auto;
+    margin-top: 0;
+    transition: all 0.2s ease;
+}
+
+.logout-btn:hover {
+    background: #ef4444;
+    color: #ffffff;
+    transform: none;
+    box-shadow: none;
+}
+
 .description {
     color: #94a3b8;
     font-size: 16px;
@@ -340,13 +393,12 @@ button.secondary-btn:hover {
     transition: width 1s ease;
 }
 
-/* Results Scroll & Container Optimallashuvi */
 .results-list {
     margin-bottom: 20px;
 }
 
 .results-scroll {
-    max-height: 320px; /* Ekran sig'imi uchun qulay balandlik */
+    max-height: 320px;
     overflow-y: auto;
     padding-right: 8px;
     display: flex;
@@ -354,7 +406,6 @@ button.secondary-btn:hover {
     gap: 12px;
 }
 
-/* Moslashtirilgan chiroyli Scrollbar */
 .results-scroll::-webkit-scrollbar {
     width: 6px;
 }
@@ -373,13 +424,11 @@ button.secondary-btn:hover {
     background: rgba(56, 189, 248, 0.6);
 }
 
-/* Result Kartochkalari UX Yaxshilanishi */
 .result-item {
     background: rgba(30, 41, 59, 0.6);
     border: 1px solid rgba(255, 255, 255, 0.08);
     padding: 16px 18px;
     border-radius: 16px;
-    margin-bottom: 0; /* Gap orqali masofa beriladi */
     border-left: 5px solid #10b981;
     display: flex;
     flex-direction: column;
@@ -403,27 +452,22 @@ button.secondary-btn:hover {
     line-height: 1.5;
 }
 
-/* Javoblarni qatorga tartibli joylash */
-.result-answers-wrapper {
+.result-answers-group {
     display: flex;
     align-items: center;
     gap: 12px;
     flex-wrap: wrap;
 }
 
-.result-answer {
+.result-target {
     font-size: 15px;
     font-weight: 800;
     color: #34d399;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
 }
 
-.result-wrong {
+.result-user-wrong {
     font-size: 14px;
     color: #f87171;
-    margin-left: 0;
     font-weight: 700;
     background: rgba(239, 68, 68, 0.1);
     padding: 2px 8px;
@@ -451,7 +495,6 @@ button.secondary-btn:hover {
         opacity: 0;
         transform: scale(0.96);
     }
-
     to {
         opacity: 1;
         transform: scale(1);
@@ -459,19 +502,9 @@ button.secondary-btn:hover {
 }
 
 @keyframes shake {
-
-    0%,
-    100% {
-        transform: translateX(0)
-    }
-
-    25% {
-        transform: translateX(-8px)
-    }
-
-    75% {
-        transform: translateX(8px)
-    }
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-8px); }
+    75% { transform: translateX(8px); }
 }
 
 .shake {
@@ -482,11 +515,9 @@ button.secondary-btn:hover {
     .card {
         padding: 28px 20px;
     }
-    
     .results-scroll {
         max-height: 280px;
     }
-    
     .button-group {
         flex-direction: column;
     }

@@ -5,42 +5,93 @@ const SUPABASE_KEY = "sb_publishable__p90Eg45QchPn2Y8uGfWHg_NpevmB3p";
 const supabaseClient = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 
 const WORDS_PER_PART = 10;
+const EXPIRATION_TIME = 10 * 24 * 60 * 60 * 1000; // 10 kun
+
 const allVocab = {};
 let vocabularyList = [];
 let totalPartsCount = 0;
 
 let currentPart = null, questions = [], currentIndex = 0, score = 0;
 let answered = false, results = [];
-let isReviewMode = false; // Review rejimini kuzatish
+let isReviewMode = false;
 
-// --- LOCAL STORAGE (10 KUNLIK TAYMER) ---
-const EXPIRATION_TIME = 10 * 24 * 60 * 60 * 1000;
-function getWordStatus() {
-  const saved = localStorage.getItem('learned_words_v2');
-  if (!saved) return { valid: [], expired: [] };
+// --- GOOGLE AUTHENTICATION ---
+async function loginWithGoogle() {
+  if (!supabaseClient) return;
+  const { error } = await supabaseClient.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: window.location.origin }
+  });
+  if (error) console.error("Kirishda xatolik:", error.message);
+}
 
-  const learnedMap = JSON.parse(saved);
+async function logout() {
+  if (!supabaseClient) return;
+  await supabaseClient.auth.signOut();
+  window.location.reload();
+}
+
+async function checkUser() {
+  if (!supabaseClient) return;
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  const loginBtn = document.getElementById('loginBtn');
+  const userProfile = document.getElementById('userProfile');
+  const userName = document.getElementById('userName');
+
+  if (user) {
+    if (loginBtn) loginBtn.style.display = 'none';
+    if (userProfile) userProfile.style.display = 'block';
+    if (userName) userName.textContent = user.user_metadata.full_name || user.email;
+  } else {
+    if (loginBtn) loginBtn.style.display = 'block';
+    if (userProfile) userProfile.style.display = 'none';
+  }
+}
+
+// --- SUPABASE PROGRESS (10 KUNLIK TAYMER) ---
+async function getWordStatus() {
+  if (!supabaseClient) return { valid: [], expired: [] };
+
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  if (!user) return { valid: [], expired: [] };
+
+  const { data, error } = await supabaseClient
+    .from('user_progress')
+    .select('word, learned_at')
+    .eq('user_id', user.id);
+
+  if (error || !data) return { valid: [], expired: [] };
+
   const now = Date.now();
   const valid = [];
   const expired = [];
 
-  for (const [word, timestamp] of Object.entries(learnedMap)) {
-    if (now - timestamp < EXPIRATION_TIME) {
-      valid.push(word);
+  data.forEach(item => {
+    if (now - item.learned_at < EXPIRATION_TIME) {
+      valid.push(item.word);
     } else {
-      expired.push(word); // 10 kundan oshgan so'zlar
+      expired.push(item.word);
     }
-  }
+  });
 
   return { valid, expired };
 }
 
-function saveLearnedWord(word) {
-  const saved = localStorage.getItem('learned_words_v2');
-  const learnedMap = saved ? JSON.parse(saved) : {};
-  
-  learnedMap[normalize(word)] = Date.now(); // Yodlanganda vaqt to'liq 10 kunga yangilanadi
-  localStorage.setItem('learned_words_v2', JSON.stringify(learnedMap));
+async function saveLearnedWord(word) {
+  if (!supabaseClient) return;
+
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  if (!user) return;
+
+  const normalizedWord = normalize(word);
+
+  await supabaseClient
+    .from('user_progress')
+    .upsert({ 
+      user_id: user.id, 
+      word: normalizedWord, 
+      learned_at: Date.now() 
+    }, { onConflict: 'user_id, word' });
 }
 
 // 2. Supabase ma'lumotlarini olish
@@ -90,17 +141,16 @@ function normalize(str) {
   return str ? str.trim().toLowerCase().replace(/['']/g, "'").replace(/\s+/g, " ") : "";
 }
 
-function showPartSelector() {
+async function showPartSelector() {
   document.getElementById('startScreen').classList.add('hidden');
   document.getElementById('partSelectorScreen').classList.remove('hidden');
   const sel = document.getElementById('partSelector');
   sel.innerHTML = '';
   
-  const status = getWordStatus();
+  const status = await getWordStatus();
   const learnedWords = status.valid;
   const expiredWords = status.expired;
 
-  // Muddat o'tgan so'zlar bo'lsa red tugma va soni chiqadi
   const reviewBtn = document.getElementById('reviewQuizBtn');
   const reviewCount = document.getElementById('reviewCount');
   if (reviewBtn && expiredWords.length > 0) {
@@ -123,12 +173,10 @@ function showPartSelector() {
   }
 }
 
-// MUDDATI O'TGAN SO'ZLARDAN TEST BOSHLASH
-function startReviewQuiz() {
-  const status = getWordStatus();
+async function startReviewQuiz() {
+  const status = await getWordStatus();
   const expiredWords = status.expired;
 
-  // Faqat taymer tugagan so'zlarni Supabase ma'lumotlaridan ajratib olish
   questions = vocabularyList.filter(item => expiredWords.includes(normalize(item.word)));
   
   if (questions.length === 0) return;
@@ -139,7 +187,7 @@ function startReviewQuiz() {
   document.getElementById('partSelectorScreen').classList.add('hidden');
   document.getElementById('quizScreen').classList.remove('hidden');
   document.getElementById('resultsScreen').classList.add('hidden');
-  showQuestion();
+  await showQuestion();
 }
 
 function backToStart() {
@@ -152,7 +200,7 @@ function exitQuizToParts() {
   showPartSelector();
 }
 
-function startPart(n) {
+async function startPart(n) {
   isReviewMode = false;
   currentPart = n;
   questions = [...allVocab[`part${n}`]];
@@ -160,12 +208,12 @@ function startPart(n) {
   document.getElementById('partSelectorScreen').classList.add('hidden');
   document.getElementById('quizScreen').classList.remove('hidden');
   document.getElementById('resultsScreen').classList.add('hidden');
-  showQuestion();
+  await showQuestion();
 }
 
-function showQuestion() {
+async function showQuestion() {
   const q = questions[currentIndex];
-  const status = getWordStatus();
+  const status = await getWordStatus();
   const isAlreadyLearned = status.valid.includes(normalize(q.word));
 
   let statusBadge = '';
@@ -192,7 +240,7 @@ function showQuestion() {
   setTimeout(() => inp.focus(), 50);
 }
 
-function checkAnswer() {
+async function checkAnswer() {
   if (answered) { nextQuestion(); return; }
   
   const inp = document.getElementById('answerInput');
@@ -205,7 +253,7 @@ function checkAnswer() {
   
   if (isCorrect) {
     score++;
-    saveLearnedWord(questions[currentIndex].word); // To'g'ri topsa, taymer qayta 10 kunga tiklanadi
+    await saveLearnedWord(questions[currentIndex].word);
   }
   
   results.push({ 
@@ -277,5 +325,8 @@ function backToPartSelector() {
   showPartSelector();
 }
 
-// Dastur ishga tushishi
-fetchVocabulary();
+// Dastur ishga tushganda tekshiruvlar
+document.addEventListener('DOMContentLoaded', () => {
+  checkUser();
+  fetchVocabulary();
+});
