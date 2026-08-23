@@ -1,8 +1,12 @@
-// 1. Supabase ulanishi
+// 1. Supabase ulanishi (CDN orqali to'g'ri olish)
 const SUPABASE_URL = "https://mnailfqtpdfrtosobhzg.supabase.co";
 const SUPABASE_KEY = "sb_publishable__p90Eg45QchPn2Y8uGfWHg_NpevmB3p";
 
-const supabaseClient = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+// window.supabase yoki window.supabase.createClient ni xavfsiz aniqlash
+const supabaseLib = window.supabaseClient || window.supabase;
+const supabaseClient = supabaseLib && supabaseLib.createClient
+  ? supabaseLib.createClient(SUPABASE_URL, SUPABASE_KEY)
+  : null;
 
 const WORDS_PER_PART = 10;
 const EXPIRATION_TIME = 10 * 24 * 60 * 60 * 1000; // 10 kun
@@ -15,12 +19,18 @@ let currentPart = null, questions = [], currentIndex = 0, score = 0;
 let answered = false, results = [];
 let isReviewMode = false;
 
-// --- GOOGLE AUTHENTICATION ---
-async function loginWithGoogle() {
+// --- GOOGLE AUTHENTICATION & USER MANAGEMENT ---
+async function loginWithGoogle(e) {
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
   if (!supabaseClient) return;
   const { error } = await supabaseClient.auth.signInWithOAuth({
     provider: 'google',
-    options: { redirectTo: window.location.origin }
+    options: {
+      redirectTo: window.location.href
+    }
   });
   if (error) console.error("Kirishda xatolik:", error.message);
 }
@@ -33,18 +43,23 @@ async function logout() {
 
 async function checkUser() {
   if (!supabaseClient) return;
-  const { data: { user } } = await supabaseClient.auth.getUser();
-  const loginBtn = document.getElementById('loginBtn');
-  const userProfile = document.getElementById('userProfile');
-  const userName = document.getElementById('userName');
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  const authModal = document.getElementById('auth-modal');
+  const loggedOutView = document.getElementById('logged-out-view');
+  const loggedInView = document.getElementById('logged-in-view');
+  const userName = document.getElementById('user-name');
+  const userAvatar = document.getElementById('user-avatar');
 
-  if (user) {
-    if (loginBtn) loginBtn.style.display = 'none';
-    if (userProfile) userProfile.style.display = 'block';
-    if (userName) userName.textContent = user.user_metadata.full_name || user.email;
+  if (session) {
+    const user = session.user;
+    if (loggedOutView) loggedOutView.classList.add('hidden');
+    if (loggedInView) loggedInView.classList.remove('hidden');
+    if (userName) userName.textContent = user.user_metadata?.full_name || user.email || 'Foydalanuvchi';
+    if (userAvatar) userAvatar.src = user.user_metadata?.avatar_url || '';
+    if (authModal) authModal.classList.add('hidden');
   } else {
-    if (loginBtn) loginBtn.style.display = 'block';
-    if (userProfile) userProfile.style.display = 'none';
+    if (loggedOutView) loggedOutView.classList.remove('hidden');
+    if (loggedInView) loggedInView.classList.add('hidden');
   }
 }
 
@@ -87,17 +102,17 @@ async function saveLearnedWord(word) {
 
   await supabaseClient
     .from('user_progress')
-    .upsert({ 
-      user_id: user.id, 
-      word: normalizedWord, 
-      learned_at: Date.now() 
+    .upsert({
+      user_id: user.id,
+      word: normalizedWord,
+      learned_at: Date.now()
     }, { onConflict: 'user_id, word' });
 }
 
 // 2. Supabase ma'lumotlarini olish
 async function fetchVocabulary() {
   if (!supabaseClient) return;
-  
+
   const { data, error } = await supabaseClient
     .from('vocabulary')
     .select('word, definition')
@@ -126,7 +141,7 @@ function createParts() {
 }
 
 // Global Enter
-document.addEventListener('keydown', function(e) {
+document.addEventListener('keydown', function (e) {
   if (e.key === 'Enter') {
     const quizScreen = document.getElementById('quizScreen');
     if (quizScreen && !quizScreen.classList.contains('hidden')) {
@@ -146,7 +161,7 @@ async function showPartSelector() {
   document.getElementById('partSelectorScreen').classList.remove('hidden');
   const sel = document.getElementById('partSelector');
   sel.innerHTML = '';
-  
+
   const status = await getWordStatus();
   const learnedWords = status.valid;
   const expiredWords = status.expired;
@@ -164,7 +179,7 @@ async function showPartSelector() {
     const btn = document.createElement('button');
     btn.className = 'part-btn';
     const partWords = allVocab['part' + i] || [];
-    
+
     const learnedInPart = partWords.filter(q => learnedWords.includes(normalize(q.word))).length;
 
     btn.innerHTML = `Part ${i} <span style="float:right; opacity:0.8; font-size:12px;">${learnedInPart}/${partWords.length} learned</span>`;
@@ -178,12 +193,12 @@ async function startReviewQuiz() {
   const expiredWords = status.expired;
 
   questions = vocabularyList.filter(item => expiredWords.includes(normalize(item.word)));
-  
+
   if (questions.length === 0) return;
 
   isReviewMode = true;
   currentIndex = 0; score = 0; results = []; answered = false;
-  
+
   document.getElementById('partSelectorScreen').classList.add('hidden');
   document.getElementById('quizScreen').classList.remove('hidden');
   document.getElementById('resultsScreen').classList.add('hidden');
@@ -222,19 +237,19 @@ async function showQuestion() {
   } else if (isAlreadyLearned) {
     statusBadge = `<span style="color:#10b981; font-size:12px; display:block; margin-bottom:5px;">✓ Mastered (Active)</span>`;
   }
-  
+
   document.getElementById('definition').innerHTML = statusBadge + q.definition;
   document.getElementById('counter').textContent = `${currentIndex + 1} / ${questions.length}`;
   document.getElementById('score').textContent = `Score: ${score}`;
   document.getElementById('progressBar').style.width = `${(currentIndex / questions.length) * 100}%`;
-  
+
   const inp = document.getElementById('answerInput');
   inp.value = ''; inp.className = ''; inp.disabled = false;
-  
+
   const fb = document.getElementById('feedback');
   fb.className = 'hidden';
   fb.style.display = 'none';
-  
+
   document.getElementById('submitBtn').textContent = 'Submit Answer';
   answered = false;
   setTimeout(() => inp.focus(), 50);
@@ -242,38 +257,38 @@ async function showQuestion() {
 
 async function checkAnswer() {
   if (answered) { nextQuestion(); return; }
-  
+
   const inp = document.getElementById('answerInput');
   const userAns = normalize(inp.value);
   const correct = normalize(questions[currentIndex].word);
-  
+
   answered = true;
   inp.disabled = true;
   const isCorrect = userAns === correct;
-  
+
   if (isCorrect) {
     score++;
     await saveLearnedWord(questions[currentIndex].word);
   }
-  
-  results.push({ 
-    definition: questions[currentIndex].definition, 
-    correct: questions[currentIndex].word, 
-    userAnswer: inp.value, 
-    isCorrect 
+
+  results.push({
+    definition: questions[currentIndex].definition,
+    correct: questions[currentIndex].word,
+    userAnswer: inp.value,
+    isCorrect
   });
-  
+
   inp.classList.add(isCorrect ? 'correct' : 'wrong');
   const fb = document.getElementById('feedback');
   fb.style.display = 'block';
   fb.className = 'feedback ' + (isCorrect ? 'correct' : 'wrong');
-  
+
   if (isCorrect) {
     fb.innerHTML = `<div class="feedback-title">✓ Correct!</div><div class="feedback-detail">Excellent word recall.</div>`;
   } else {
     fb.innerHTML = `<div class="feedback-title">✗ Incorrect</div><div class="feedback-detail">Target answer: <strong style="color:#38bdf8">${questions[currentIndex].word}</strong></div>`;
   }
-  
+
   document.getElementById('submitBtn').textContent = currentIndex + 1 === questions.length ? 'See Final Results →' : 'Next Question →';
 }
 
@@ -286,25 +301,25 @@ function nextQuestion() {
 function showResults() {
   document.getElementById('quizScreen').classList.add('hidden');
   document.getElementById('resultsScreen').classList.remove('hidden');
-  
+
   const pct = Math.round((score / questions.length) * 100);
   const grade = pct >= 90 ? 'Mastered!' : pct >= 70 ? 'Great job!' : pct >= 50 ? 'Good Effort!' : 'Needs Practice!';
   const color = pct >= 90 ? '#10b981' : pct >= 70 ? '#38bdf8' : pct >= 50 ? '#f59e0b' : '#ef4444';
-  
+
   document.getElementById('gradeLabel').textContent = grade;
   document.getElementById('gradeLabel').style.color = color;
   document.getElementById('percentScore').textContent = pct + '%';
   document.getElementById('resultsSummary').textContent = `${score} out of ${questions.length} correct`;
-  
+
   const bar = document.getElementById('resultsBar');
   if (bar) {
     bar.style.background = color;
     setTimeout(() => bar.style.width = pct + '%', 100);
   }
-  
+
   const list = document.getElementById('resultsList');
   list.className = 'results-scroll-container';
-  
+
   list.innerHTML = results.map(r => `
     <div class="result-item ${r.isCorrect ? '' : 'wrong'}">
       <div class="result-definition">${r.definition}</div>
@@ -325,8 +340,48 @@ function backToPartSelector() {
   showPartSelector();
 }
 
-// Dastur ishga tushganda tekshiruvlar
+// DOM YUKLANGANIDAN SO'NG HODISALARNI BIRIKTIRISH
 document.addEventListener('DOMContentLoaded', () => {
   checkUser();
   fetchVocabulary();
+
+  const authModal = document.getElementById('auth-modal');
+  const openAuthBtn = document.getElementById('open-auth-btn');
+  const closeModalBtn = document.getElementById('close-modal-btn');
+  const googleLoginBtn = document.getElementById('google-login-btn');
+  const logoutBtn = document.getElementById('logout-btn');
+
+  // Modalni ochish
+  if (openAuthBtn) {
+    openAuthBtn.addEventListener('click', () => {
+      if (authModal) {
+        authModal.classList.remove('hidden');
+        authModal.style.display = 'flex'; // Ko'rsatishni kafolatlash
+      }
+    });
+  }
+
+  // X tugmasi orqali yopish
+  if (closeModalBtn) {
+    closeModalBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (authModal) {
+        authModal.classList.add('hidden');
+        authModal.style.display = 'none'; // Yopishni kafolatlash
+      }
+    });
+  }
+
+  // Tashqariga bosilganda yopish
+  if (authModal) {
+    authModal.addEventListener('click', (e) => {
+      if (e.target === authModal) {
+        authModal.classList.add('hidden');
+        authModal.style.display = 'none';
+      }
+    });
+  }
+
+  if (googleLoginBtn) googleLoginBtn.addEventListener('click', loginWithGoogle);
+  if (logoutBtn) logoutBtn.addEventListener('click', logout);
 });
