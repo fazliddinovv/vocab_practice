@@ -12,19 +12,40 @@ let totalPartsCount = 0;
 let currentPart = null, questions = [], currentIndex = 0, score = 0;
 let answered = false, results = [];
 
-// --- LOCAL STORAGE BILAN ISHLASH ---
+// --- LOCAL STORAGE BILAN ISHLASH (10 KUNLIK TAYMER) ---
+const EXPIRATION_TIME = 10 * 24 * 60 * 60 * 1000; // 10 kun millisekundlarda
+
 function getLearnedWords() {
-  const saved = localStorage.getItem('learned_words');
-  return saved ? JSON.parse(saved) : [];
+  const saved = localStorage.getItem('learned_words_v2');
+  if (!saved) return [];
+  
+  const learnedMap = JSON.parse(saved);
+  const now = Date.now();
+  const validWords = [];
+  let isUpdated = false;
+
+  for (const [word, timestamp] of Object.entries(learnedMap)) {
+    if (now - timestamp < EXPIRATION_TIME) {
+      validWords.push(word);
+    } else {
+      delete learnedMap[word]; // 10 kundan oshgan so'zlarni o'chirish
+      isUpdated = true;
+    }
+  }
+
+  if (isUpdated) {
+    localStorage.setItem('learned_words_v2', JSON.stringify(learnedMap));
+  }
+
+  return validWords;
 }
 
 function saveLearnedWord(word) {
-  let learned = getLearnedWords();
-  const normalizedWord = normalize(word);
-  if (!learned.includes(normalizedWord)) {
-    learned.push(normalizedWord);
-    localStorage.setItem('learned_words', JSON.stringify(learned));
-  }
+  const saved = localStorage.getItem('learned_words_v2');
+  const learnedMap = saved ? JSON.parse(saved) : {};
+  
+  learnedMap[normalize(word)] = Date.now(); // Hozirgi vaqtni saqlash
+  localStorage.setItem('learned_words_v2', JSON.stringify(learnedMap));
 }
 
 // 2. Ma'lumotlarni Supabase'dan olish
@@ -87,7 +108,6 @@ function showPartSelector() {
     btn.className = 'part-btn';
     const partWords = allVocab['part' + i] || [];
     
-    // Part ichida nechta so'z yodlanganini hisoblash
     const learnedInPart = partWords.filter(q => learnedWords.includes(normalize(q.word))).length;
 
     btn.innerHTML = `Part ${i} <span style="float:right; opacity:0.8; font-size:12px;">${learnedInPart}/${partWords.length} learned</span>`;
@@ -121,8 +141,7 @@ function showQuestion() {
   const learnedWords = getLearnedWords();
   const isAlreadyLearned = learnedWords.includes(normalize(q.word));
 
-  // Agar so'z avval yodlangan bo'lsa, indicator ko'rsatish
-  const statusBadge = isAlreadyLearned ? `<span style="color:#10b981; font-size:12px; display:block; margin-bottom:5px;">✓ Mastered before</span>` : '';
+  const statusBadge = isAlreadyLearned ? `<span style="color:#10b981; font-size:12px; display:block; margin-bottom:5px;">✓ Mastered (Active)</span>` : '';
   
   document.getElementById('definition').innerHTML = statusBadge + q.definition;
   document.getElementById('counter').textContent = `${currentIndex + 1} / ${questions.length}`;
@@ -154,7 +173,7 @@ function checkAnswer() {
   
   if (isCorrect) {
     score++;
-    saveLearnedWord(questions[currentIndex].word); // <--- SO'Z LOCALSTORAGE'GA SAQLANADI
+    saveLearnedWord(questions[currentIndex].word); // <--- Saqlash va 10 kunlik taymerni yangilash
   }
   
   results.push({ 
