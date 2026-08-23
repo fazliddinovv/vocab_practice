@@ -14,8 +14,8 @@ let answered = false, results = [];
 let isReviewMode = false; // Review rejimini kuzatish
 
 // --- LOCAL STORAGE (10 KUNLIK TAYMER) ---
-const EXPIRATION_TIME = 10 * 24 * 60 * 60 * 1000; // 10 kun
-
+// Test uchun (30 soniya):
+const EXPIRATION_TIME = 30 * 1000;
 function getWordStatus() {
   const saved = localStorage.getItem('learned_words_v2');
   if (!saved) return { valid: [], expired: [] };
