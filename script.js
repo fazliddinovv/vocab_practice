@@ -2,7 +2,6 @@
 const SUPABASE_URL = "https://mnailfqtpdfrtosobhzg.supabase.co";
 const SUPABASE_KEY = "sb_publishable__p90Eg45QchPn2Y8uGfWHg_NpevmB3p";
 
-// window.supabase yoki window.supabase.createClient ni xavfsiz aniqlash
 const supabaseLib = window.supabaseClient || window.supabase;
 const supabaseClient = supabaseLib && supabaseLib.createClient
   ? supabaseLib.createClient(SUPABASE_URL, SUPABASE_KEY)
@@ -18,6 +17,9 @@ let totalPartsCount = 0;
 let currentPart = null, questions = [], currentIndex = 0, score = 0;
 let answered = false, results = [];
 let isReviewMode = false;
+
+// KESH (xotirada saqlash) — har safar tarmoqqa murojaat qilmaslik uchun
+let cachedStatus = { valid: [], expired: [] };
 
 // --- GOOGLE AUTHENTICATION & USER MANAGEMENT ---
 async function loginWithGoogle(e) {
@@ -63,50 +65,54 @@ async function checkUser() {
   }
 }
 
-// --- SUPABASE PROGRESS (10 KUNLIK TAYMER) ---
-async function getWordStatus() {
-  if (!supabaseClient) return { valid: [], expired: [] };
+// --- SUPABASE PROGRESS (Keshni yangilash) ---
+async function refreshWordStatus() {
+  if (!supabaseClient) return;
 
   const { data: { user } } = await supabaseClient.auth.getUser();
-  if (!user) return { valid: [], expired: [] };
+  if (!user) return;
 
   const { data, error } = await supabaseClient
     .from('user_progress')
     .select('word, learned_at')
     .eq('user_id', user.id);
 
-  if (error || !data) return { valid: [], expired: [] };
+  if (error || !data) return;
 
   const now = Date.now();
-  const valid = [];
-  const expired = [];
+  cachedStatus = { valid: [], expired: [] };
 
   data.forEach(item => {
     if (now - item.learned_at < EXPIRATION_TIME) {
-      valid.push(item.word);
+      cachedStatus.valid.push(item.word);
     } else {
-      expired.push(item.word);
+      cachedStatus.expired.push(item.word);
     }
   });
-
-  return { valid, expired };
 }
 
-async function saveLearnedWord(word) {
+// Bazaga saqlash orqa fonda ishlaydi (UI'ni to'xtatmaydi)
+function saveLearnedWord(word) {
   if (!supabaseClient) return;
-
-  const { data: { user } } = await supabaseClient.auth.getUser();
-  if (!user) return;
 
   const normalizedWord = normalize(word);
 
-  await supabaseClient
-    .from('user_progress')
-    .upsert({
-      user_id: user.id,
-      word: normalizedWord,
-      learned_at: Date.now()
-    }, { onConflict: 'user_id, word' });
+  // Keshni darhol joyida yangilaymiz
+  if (!cachedStatus.valid.includes(normalizedWord)) {
+    cachedStatus.valid.push(normalizedWord);
+  }
+
+  supabaseClient.auth.getUser().then(({ data: { user } }) => {
+    if (!user) return;
+    supabaseClient
+      .from('user_progress')
+      .upsert({
+        user_id: user.id,
+        word: normalizedWord,
+        learned_at: Date.now()
+      }, { onConflict: 'user_id, word' })
+      .then();
+  });
 }
 
 // 2. Supabase ma'lumotlarini olish
@@ -162,9 +168,9 @@ async function showPartSelector() {
   const sel = document.getElementById('partSelector');
   sel.innerHTML = '';
 
-  const status = await getWordStatus();
-  const learnedWords = status.valid;
-  const expiredWords = status.expired;
+  await refreshWordStatus();
+  const learnedWords = cachedStatus.valid;
+  const expiredWords = cachedStatus.expired;
 
   const reviewBtn = document.getElementById('reviewQuizBtn');
   const reviewCount = document.getElementById('reviewCount');
@@ -188,10 +194,8 @@ async function showPartSelector() {
   }
 }
 
-async function startReviewQuiz() {
-  const status = await getWordStatus();
-  const expiredWords = status.expired;
-
+function startReviewQuiz() {
+  const expiredWords = cachedStatus.expired;
   questions = vocabularyList.filter(item => expiredWords.includes(normalize(item.word)));
 
   if (questions.length === 0) return;
@@ -202,7 +206,7 @@ async function startReviewQuiz() {
   document.getElementById('partSelectorScreen').classList.add('hidden');
   document.getElementById('quizScreen').classList.remove('hidden');
   document.getElementById('resultsScreen').classList.add('hidden');
-  await showQuestion();
+  showQuestion();
 }
 
 function backToStart() {
@@ -215,7 +219,7 @@ function exitQuizToParts() {
   showPartSelector();
 }
 
-async function startPart(n) {
+function startPart(n) {
   isReviewMode = false;
   currentPart = n;
   questions = [...allVocab[`part${n}`]];
@@ -223,13 +227,13 @@ async function startPart(n) {
   document.getElementById('partSelectorScreen').classList.add('hidden');
   document.getElementById('quizScreen').classList.remove('hidden');
   document.getElementById('resultsScreen').classList.add('hidden');
-  await showQuestion();
+  showQuestion();
 }
 
-async function showQuestion() {
+// Savol ko'rsatish endi bir zumda ishlaydi (Instant render)
+function showQuestion() {
   const q = questions[currentIndex];
-  const status = await getWordStatus();
-  const isAlreadyLearned = status.valid.includes(normalize(q.word));
+  const isAlreadyLearned = cachedStatus.valid.includes(normalize(q.word));
 
   let statusBadge = '';
   if (isReviewMode) {
@@ -252,10 +256,11 @@ async function showQuestion() {
 
   document.getElementById('submitBtn').textContent = 'Submit Answer';
   answered = false;
-  setTimeout(() => inp.focus(), 50);
+  setTimeout(() => inp.focus(), 10);
 }
 
-async function checkAnswer() {
+// Instant javob tekshirish
+function checkAnswer() {
   if (answered) { nextQuestion(); return; }
 
   const inp = document.getElementById('answerInput');
@@ -268,7 +273,7 @@ async function checkAnswer() {
 
   if (isCorrect) {
     score++;
-    await saveLearnedWord(questions[currentIndex].word);
+    saveLearnedWord(questions[currentIndex].word);
   }
 
   results.push({
@@ -356,7 +361,7 @@ document.addEventListener('DOMContentLoaded', () => {
     openAuthBtn.addEventListener('click', () => {
       if (authModal) {
         authModal.classList.remove('hidden');
-        authModal.style.display = 'flex'; // Ko'rsatishni kafolatlash
+        authModal.style.display = 'flex';
       }
     });
   }
@@ -367,7 +372,7 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       if (authModal) {
         authModal.classList.add('hidden');
-        authModal.style.display = 'none'; // Yopishni kafolatlash
+        authModal.style.display = 'none';
       }
     });
   }
